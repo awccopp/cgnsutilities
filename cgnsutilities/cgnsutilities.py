@@ -1653,6 +1653,33 @@ class Block(object):
         self.dims[1] = self.coords.shape[1]
         self.dims[2] = self.coords.shape[2]
 
+    def makeDualBlock(self):
+        newSize = (self.dims[0] - 1, self.dims[1], self.dims[2] - 1, 3)
+        newCoords = numpy.zeros(newSize)
+        j = 0
+        for i in range(newSize[0]):
+            for k in range(newSize[2]):
+                x1 = self.coords[i, j, k, 0:2]
+                x2 = self.coords[i + 1, j, k, 0:2]
+                x3 = self.coords[i, j, k + 1, 0:2]
+                x4 = self.coords[i + 1, j, k + 1, 0:2]
+
+                xnew = (x1[0] + x2[0] + x3[0] + x4[0]) / 4
+                ynew = (x1[1] + x2[1] + x3[1] + x4[1]) / 4
+                newCoords[i, j, k, 0] = xnew
+                newCoords[i, j, k, 1] = ynew
+                newCoords[i, j + 1, k, 0] = xnew
+                newCoords[i, j + 1, k, 1] = ynew
+                newCoords[i, j, k, 2] = self.coords[i, j, k, 2]
+                newCoords[i, j + 1, k, 2] = self.coords[i, j + 1, k, 2]
+
+        self.coords = newCoords
+        self.dims[0] = self.coords.shape[0]
+        self.dims[1] = self.coords.shape[1]
+        self.dims[2] = self.coords.shape[2]
+        self.bocos = []
+        self.B2Bs = []
+
     def double2D(self):
         """Double in just the 2D direction"""
         # First find the 2D direction
@@ -2261,6 +2288,32 @@ class Block(object):
         nFace = 2 * ((il - 1) * (jl - 1) + (il - 1) * (kl - 1) + (jl - 1) * (kl - 1))
 
         return libcgns_utils.utils.computefacecoords(self.coords, nFace, blockID)
+
+    def getBC(self, face):
+        d = self.dims
+        if face.lower() == "ilow":
+            ptRange = [[1, 1], [1, d[1]], [1, d[2]]]
+        elif face.lower() == "ihigh":
+            ptRange = [[d[0], d[0]], [1, d[1]], [1, d[2]]]
+        elif face.lower() == "jlow":
+            ptRange = [[1, d[0]], [1, 1], [1, d[2]]]
+        elif face.lower() == "jhigh":
+            ptRange = [[1, d[1], 1], [d[0], d[1], d[2]]]
+            ptRange = [[1, d[0]], [d[1], d[1]], [1, d[2]]]
+
+        elif face.lower() == "klow":
+            ptRange = [[1, 1, 1], [d[0], d[1], 1]]
+            ptRange = [[1, d[0]], [1, d[1]], [1, 1]]
+        elif face.lower() == "khigh":
+            ptRange = [[1, 1, d[2]], [d[0], d[1], d[2]]]
+            ptRange = [[1, d[0]], [1, d[1]], [d[2], d[2]]]
+        else:
+            raise ValueError(f"Face must be one of iLow, iHigh, jLow, jHigh, kLow, or kHigh. Input was {face}")
+        for boco in self.bocos:
+            if numpy.all(numpy.array(ptRange) == numpy.array(boco.ptRange)):
+                key = next(key for key, value in BC.items() if value == boco.type)
+                return key
+        return "B2B"
 
 
 class Boco(object):
